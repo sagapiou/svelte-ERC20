@@ -23,7 +23,7 @@ async function getWeb3Modal() {
             walletconnect: {
                 package: WalletConnectProvider,
                 options: {
-                    infuraId: import.meta.env.VITE_INFURA_API_KEY,
+                    infuraId: "0e9014d34dcb4dd6811bd829284881a3",
                 },
             },
         },
