@@ -23,7 +23,7 @@ async function getWeb3Modal() {
             walletconnect: {
                 package: WalletConnectProvider,
                 options: {
-                    infuraId: "0e9014d34dcb4dd6811bd829284881a3",
+                    infuraId: "27e484dcd9e3efcfd25a83a78777cdf1",
                 },
             },
         },
