@@ -6,6 +6,7 @@
     import abiSaga from "../../../constants/abiERC.json"
     import addressSaga from "../../../constants/contractERC20Addresses.json"
     import { onMount } from "svelte"
+    import TrReceipt from "./trReceipt.svelte"
 
     $: metamaskConnected = window.ethereum ? window.ethereum.isConnected() : false
     $: slicedSigner = sliceAddress($ethersStore.signerAddress)
@@ -13,7 +14,8 @@
     $: balanceSigner = roundedBalanceEthFromWei($ethersStore.balance, 8)
     $: chainId = $ethersStore.selectedChainId
 
-    export let contractERC20Address
+    export let contractERC20
+    let contractAddress
     let contractToLoad
     let chainSupported = false
     let ercName
@@ -26,14 +28,15 @@
     let allowance = ""
     let allowanceDec = ""
     let allowanceOwner, allowanceSpender
-    let errorUp = false
-    let errorDescription = ""
+    let somethingsUp = false
+    let transactionError = null
 
     onMount(async () => {
-        if (walletConnected == true && contractERC20Address != "" && contractERC20Address != null) {
+        if (walletConnected == true && contractERC20 != null) {
+            ethersStore.resetContractChanged()
             await contractToLoadFunctions().catch((error) => {
-                errorUp = true
-                errorDescription = `Contract connection failed : ${error.message}`
+                somethingsUp = true
+                transactionError = { error }
             })
             await getInitialData().catch((error) => {
                 console.log(error)
@@ -43,11 +46,14 @@
 
     async function contractToLoadFunctions() {
         if (chainId == 3 || chainId == 4 || chainId == 31337) {
-            if (contractERC20Address == "saga") {
-                contractERC20Address = addressSaga[chainId].toString()
-            }
             chainSupported = true
-            contractToLoad = await connectToContract(contractERC20Address, abiSaga)
+            if (contractERC20 == "saga") {
+                contractAddress = addressSaga[chainId].toString()
+            } else {
+                contractAddress = $ethersStore.contract
+            }
+            console.log(contractAddress)
+            contractToLoad = await connectToContract(contractAddress, abiSaga)
             connectSignerToContract(contractToLoad)
         } else {
             chainSupported = false
@@ -88,48 +94,79 @@
                 .toString()
                 .replace(/\B(?=(\d{3})+(?!\d))/g, ",")
         } catch (error) {
-            errorUp = true
-            errorDescription = `Get balance failed : ${error.message}`
+            somethingsUp = true
+            transactionError = { error }
         }
     }
 
     async function ercGetAllowance() {
         try {
             allowance = await contractToLoad.allowance(allowanceOwner, allowanceSpender)
+            allowanceDec = (parseInt(allowance) / 10 ** ercDecimals)
+                .toString()
+                .replace(/\B(?=(\d{3})+(?!\d))/g, ",")
         } catch (error) {
-            errorUp = true
-            errorDescription = `Get allowance failed : ${error.message}`
+            somethingsUp = true
+            transactionError = { error }
         }
+    }
+
+    function toggleMessage() {
+        somethingsUp = false
+        transactionError = null
     }
 </script>
 
-{#if errorUp}
-    <div class="alert alert-error shadow-lg w-96">
-        <div>
-            <svg
-                xmlns="http://www.w3.org/2000/svg"
-                class="stroke-current flex-shrink-0 h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                on:click={() => {
-                    errorUp = false
-                }}
-                ><path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-                /></svg
-            >
-            <span>{errorDescription}</span>
+{#if contractAddress && chainSupported}
+    <input type="checkbox" id="my-modal-5" class="modal-toggle" />
+    <div class="modal">
+        <div class="modal-box w-11/12 max-w-5xl">
+            <h3 class="font-bold text-lg">
+                {#if transactionError !== null}
+                    Transaction Error!
+                {:else}
+                    Info!
+                {/if}
+            </h3>
+            <p class="py-4">
+                <TrReceipt transReceipt={null} transError={transactionError} />
+            </p>
+            <div class="modal-action">
+                <label for="my-modal-5" class="btn" on:click={toggleMessage}>OK</label>
+            </div>
         </div>
     </div>
-{/if}
-{#if contractERC20Address != "" && chainSupported}
     <div class="grid flex-grow card bg-base-300 rounded-box place-items-center">
         <div class="h-2 m-4" />
         <h2 class="text-xl">ERC20 DATA CALLS (NO GAS COST)</h2>
         <div class="h-2 m-4" />
+        {#if somethingsUp}
+            <div class="alert shadow-lg">
+                <div>
+                    <svg
+                        xmlns="www.saga.net"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        class="stroke-info flex-shrink-0 w-6 h-6"
+                        ><path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        /></svg
+                    >
+                    <div>
+                        <h3 class="font-bold">New message!</h3>
+                        <div class="text-xs">You have 1 unread message</div>
+                    </div>
+                </div>
+                <div class="flex-none">
+                    <label for="my-modal-5" class="btn modal-button">see</label>
+                </div>
+            </div>
+            <div class="h-2 m-4" />
+        {/if}
+
         <div class="stats ">
             <div class="stat">
                 <div class="stat-title">NAME</div>
@@ -214,7 +251,7 @@
         </div>
         <div class="h-2 m-4" />
 
-        <div class="form-control align-middle border-2 flex">
+        <div class="form-control align-middle border-8 flex">
             <div class="input-group align-middle">
                 <div class="tooltip" data-tip={`ADDRESS: ALLOWANCE OWNER`}>
                     <input

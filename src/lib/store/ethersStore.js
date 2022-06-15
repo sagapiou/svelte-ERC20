@@ -22,6 +22,8 @@ const ethersStore = writable({
     provider: null,
     eipProvider: null,
     evmProviderType: "EIP1193", // eg metamask
+    contract: "",
+    changedContract: false,
 })
 
 const customEthersStore = {
@@ -62,6 +64,32 @@ const customEthersStore = {
                 signer: _signer,
                 signerAddress: _signerAddress,
                 balance: _balance,
+            }
+        })
+    },
+    updateContract: (_contract) => {
+        ethersStore.update((state) => {
+            return {
+                ...state,
+                contract: _contract,
+                changedContract: true,
+            }
+        })
+    },
+    resetContract: (_contract) => {
+        ethersStore.update((state) => {
+            return {
+                ...state,
+                contract: "",
+                changedContract: false,
+            }
+        })
+    },
+    resetContractChanged: (_contract) => {
+        ethersStore.update((state) => {
+            return {
+                ...state,
+                changedContract: false,
             }
         })
     },

@@ -6,24 +6,27 @@
     import abiSaga from "../../../constants/abiERC.json"
     import addressSaga from "../../../constants/contractERC20Addresses.json"
     import { onMount } from "svelte"
+    import TrReceipt from "./trReceipt.svelte"
 
     $: metamaskConnected = window.ethereum ? window.ethereum.isConnected() : false
     $: slicedSigner = sliceAddress($ethersStore.signerAddress)
     $: walletConnected = $ethersStore.walletConnected
     $: balanceSigner = roundedBalanceEthFromWei($ethersStore.balance, 8)
     $: chainId = $ethersStore.selectedChainId
+    $: contractAddress = $ethersStore.contract == "" ? "" : $ethersStore.contract
 
-    export let contractERC20Address
+    export let contractERC20
+    let addressToConnect
     let chainSupported = false
     let contractToLoad
-    let errorUp = false
-    let errorDescription = ""
+    let somethingsUp = false
+    let transactionError = null
     let sendTransactionTransfer = false
     let sendTransactionApprove = false
     let sendTransactionIncrAllowance = false
     let sendTransactionDecrAllowance = false
     let sendTransactionTransferFrom = false
-    let transactionReceipt
+    let transactionReceipt = null
     let trasnferTo
     let transferAmount
     let approveAddress
@@ -38,11 +41,7 @@
 
     onMount(async () => {
         try {
-            if (
-                walletConnected == true &&
-                contractERC20Address != "" &&
-                contractERC20Address != null
-            ) {
+            if (walletConnected == true) {
                 await contractToLoadFunctions()
             }
         } catch (error) {
@@ -52,11 +51,13 @@
 
     async function contractToLoadFunctions() {
         if (chainId == 3 || chainId == 4 || chainId == 31337) {
-            if (contractERC20Address == "saga") {
-                contractERC20Address = addressSaga[chainId].toString()
+            if (contractERC20 == "saga") {
+                addressToConnect = addressSaga[chainId].toString()
+            } else {
+                addressToConnect = contractAddress
             }
             chainSupported = true
-            contractToLoad = await connectToContract(contractERC20Address, abiSaga)
+            contractToLoad = await connectToContract(addressToConnect, abiSaga)
             connectSignerToContract(contractToLoad)
         } else {
             chainSupported = false
@@ -72,12 +73,13 @@
         try {
             tx = await contractToLoad.transfer(trasnferTo, transferAmount)
             transactionReceipt = await tx.wait()
+            somethingsUp = true
             //console.log("transactionReceipt: ", transactionReceipt)
             sendTransactionTransfer = false
             //console.error("vgika trans")
         } catch (error) {
-            errorUp = true
-            errorDescription = `Transfer Amount failed. The transaction has been rolled back. Error Description : ${error.message}`
+            somethingsUp = true
+            transactionError = { error }
             sendTransactionTransfer = false
         }
     }
@@ -88,12 +90,13 @@
         try {
             tx = await contractToLoad.approve(approveAddress, approveAmount)
             transactionReceipt = await tx.wait()
+            somethingsUp = true
             //console.log("transactionReceipt: ", transactionReceipt)
             sendTransactionApprove = false
             //console.error("vgika trans")
         } catch (error) {
-            errorUp = true
-            errorDescription = `Approve failed. The transaction has been rolled back. Error Description : ${error.message}`
+            somethingsUp = true
+            transactionError = { error }
             sendTransactionApprove = false
         }
     }
@@ -104,12 +107,13 @@
         try {
             tx = await contractToLoad.increaseAllowance(incrAllowanceAddress, incrAllowanceAmount)
             transactionReceipt = await tx.wait()
+            somethingsUp = true
             //console.log("transactionReceipt: ", transactionReceipt)
             sendTransactionIncrAllowance = false
             //console.error("vgika trans")
         } catch (error) {
-            errorUp = true
-            errorDescription = `Increase Allowance Failed . The transaction has been rolled back. Error Description : ${error.message}`
+            somethingsUp = true
+            transactionError = { error }
             sendTransactionIncrAllowance = false
         }
     }
@@ -120,12 +124,13 @@
         try {
             tx = await contractToLoad.decreaseAllowance(decrAllowanceAddress, decrAllowanceAmount)
             transactionReceipt = await tx.wait()
+            somethingsUp = true
             //console.log("transactionReceipt: ", transactionReceipt)
             sendTransactionDecrAllowance = false
             //console.error("vgika trans")
         } catch (error) {
-            errorUp = true
-            errorDescription = `Decrease allowance failed. The transaction has been rolled back. Error Description : ${error.message}`
+            somethingsUp = true
+            transactionError = { error }
             sendTransactionDecrAllowance = false
         }
     }
@@ -140,44 +145,72 @@
                 transferFromAmount
             )
             transactionReceipt = await tx.wait()
+            somethingsUp = true
             //console.log("transactionReceipt: ", transactionReceipt)
             sendTransactionTransferFrom = false
             //console.error("vgika trans")
         } catch (error) {
-            errorUp = true
-            errorDescription = `Transfer From Trannsaction failed. The transaction has been rolled back. Error Description : ${error.message}`
+            somethingsUp = true
+            transactionError = { error }
             sendTransactionTransferFrom = false
         }
     }
+
+    function toggleMessage() {
+        somethingsUp = false
+        transactionError = null
+    }
 </script>
 
-{#if errorUp}
-    <div class="alert alert-error shadow-lg">
-        <div>
-            <svg
-                xmlns="http://www.w3.org/2000/svg"
-                class="stroke-current flex-shrink-0 h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                on:click={() => {
-                    errorUp = false
-                }}
-                ><path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-                /></svg
-            >
-            <span>{errorDescription}</span>
+{#if addressToConnect != "" && chainSupported}
+    <input type="checkbox" id="my-modal-6" class="modal-toggle" />
+    <div class="modal">
+        <div class="modal-box w-11/12 max-w-5xl">
+            <h3 class="font-bold text-lg">
+                {#if transactionError !== null}
+                    Transaction Error!
+                {:else}
+                    Info!
+                {/if}
+            </h3>
+            <p class="py-4">
+                <TrReceipt transReceipt={transactionReceipt} transError={transactionError} />
+            </p>
+            <div class="modal-action">
+                <label for="my-modal-6" class="btn" on:click={toggleMessage}>OK</label>
+            </div>
         </div>
     </div>
-{/if}
-{#if contractERC20Address != "" && chainSupported}
     <div class="grid flex-grow card bg-base-300 rounded-box place-items-center">
         <div class="h-2 m-4" />
         <h2 class="text-xl">ERC20 CALLS (GAS COST)</h2>
         <div class="h-2 m-4" />
+        {#if somethingsUp}
+            <div class="alert shadow-lg">
+                <div>
+                    <svg
+                        xmlns="www.saga.net"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        class="stroke-info flex-shrink-0 w-6 h-6"
+                        ><path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        /></svg
+                    >
+                    <div>
+                        <h3 class="font-bold">New message!</h3>
+                        <div class="text-xs">You have 1 unread message</div>
+                    </div>
+                </div>
+                <div class="flex-none">
+                    <label for="my-modal-6" class="btn modal-button">see</label>
+                </div>
+            </div>
+            <div class="h-2 m-4" />
+        {/if}
 
         <!-- TRANFER FUNCTION -->
         <div class="form-control align-middle flex border-b-4">

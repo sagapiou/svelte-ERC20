@@ -6,6 +6,7 @@
     import addressFact from "../../../constants/contractFact20Addresses.json"
     import { onMount } from "svelte"
     import { createEventDispatcher } from "svelte"
+    import TrReceipt from "./trReceipt.svelte"
 
     $: metamaskConnected = window.ethereum ? window.ethereum.isConnected() : false
     $: slicedSigner = sliceAddress($ethersStore.signerAddress)
@@ -15,13 +16,13 @@
 
     let chainSupported = false
     let contractToLoad
-    let errorUp = false
-    let errorDescription = ""
+    let somethingsUp = false
+    let transactionError = null
     let ercNewName
     let ercNewSymbol
-    let ercNewDecimals
+    let ercNewSupply
     let sendTransactionNewContract
-    let transactionReceipt
+    let transactionReceipt = null
     let contractAddresses = []
     let selectedContract
 
@@ -29,12 +30,11 @@
         try {
             if (walletConnected == true) {
                 await contractToLoadFunctions().catch((error) => {
-                    errorUp = true
-                    errorDescription = error
+                    somethingsUp = true
+                    transactionError = { error }
                 })
                 await getERCContracts().catch((error) => {
-                    errorUp = true
-                    errorDescription = error
+                    console.log(error)
                 })
             }
         } catch (error) {
@@ -61,15 +61,16 @@
         sendTransactionNewContract = true
         let tx
         try {
-            tx = await contractToLoad.deployNewERC20Token(ercNewName, ercNewSymbol, ercNewDecimals)
+            tx = await contractToLoad.deployNewERC20Token(ercNewName, ercNewSymbol, ercNewSupply)
             transactionReceipt = await tx.wait()
+            somethingsUp = true
             //console.log("transactionReceipt: ", transactionReceipt)
             sendTransactionNewContract = false
             await getERCContracts()
             //console.error("vgika trans")
         } catch (error) {
-            errorUp = true
-            errorDescription = `Contract Creation Failed : ${error.message}`
+            somethingsUp = true
+            transactionError = { error }
             sendTransactionNewContract = false
         }
     }
@@ -78,36 +79,42 @@
         try {
             contractAddresses = await contractToLoad.getDeployedERC20()
         } catch (error) {
-            errorUp = true
-            errorDescription = `Fetch contracts failed : ${error.message}`
+            somethingsUp = true
+            transactionError = { error }
         }
+    }
+
+    function toggleMessage() {
+        somethingsUp = false
+        transactionError = null
     }
 </script>
 
-{#if errorUp}
-    <div class="alert alert-error shadow-lg w-96">
-        <div>
-            <svg
-                xmlns="http://www.w3.org/2000/svg"
-                class="stroke-current flex-shrink-0 h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                on:click={() => {
-                    errorUp = false
-                }}
-                ><path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-                /></svg
-            >
-            <span>{errorDescription}</span>
-        </div>
-    </div>
-{/if}
 {#if chainSupported}
     <table class=" flex-row w-full">
+        <tr>
+            <input type="checkbox" id="my-modal-7" class="modal-toggle" />
+            <div class="modal">
+                <div class="modal-box w-11/12 max-w-5xl">
+                    <h3 class="font-bold text-lg">
+                        {#if transactionError !== null}
+                            Transaction Error!
+                        {:else}
+                            Info!
+                        {/if}
+                    </h3>
+                    <p class="py-4">
+                        <TrReceipt
+                            transReceipt={transactionReceipt}
+                            transError={transactionError}
+                        />
+                    </p>
+                    <div class="modal-action">
+                        <label for="my-modal-7" class="btn" on:click={toggleMessage}>OK</label>
+                    </div>
+                </div>
+            </div>
+        </tr>
         <tr>
             <div class="h-1 m-1" />
         </tr>
@@ -146,12 +153,12 @@
                 <div class=" align-middle">
                     <div class="form-control flex float-left">
                         <label class="input-group float-left align-middle">
-                            <span>decimals</span>
+                            <span>supply</span>
                             <input
                                 type="text"
-                                placeholder="decimals"
+                                placeholder="Initial Supply"
                                 class="input input-bordered"
-                                bind:value={ercNewDecimals}
+                                bind:value={ercNewSupply}
                             />
                         </label>
                     </div>
@@ -163,7 +170,9 @@
                     class="select select-primary w-full max-w-xs"
                     bind:value={selectedContract}
                     on:change={() => {
-                        dispatch("contractSelected", selectedContract)
+                        //dispatch("contractSelected", selectedContract)
+                        ethersStore.resetContract()
+                        ethersStore.updateContract(selectedContract)
                     }}
                 >
                     <option disabled selected>Which Contract to load?</option>
@@ -188,6 +197,34 @@
                         >
                     {/if}
                 </div>
+            </td>
+            <td>
+                {#if somethingsUp}
+                    <div class="alert shadow-lg">
+                        <div>
+                            <svg
+                                xmlns="www.saga.net"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                class="stroke-info flex-shrink-0 w-6 h-6"
+                                ><path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                /></svg
+                            >
+                            <div>
+                                <h3 class="font-bold">New message!</h3>
+                                <div class="text-xs">You have 1 unread message</div>
+                            </div>
+                        </div>
+                        <div class="flex-none">
+                            <label for="my-modal-7" class="btn modal-button">see</label>
+                        </div>
+                    </div>
+                    <div class="h-2 m-4" />
+                {/if}
             </td>
             <td />
             <td />
